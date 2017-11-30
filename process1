@@ -1,0 +1,226 @@
+#!/bin/bash
+
+#####GLOBAL VARIABLES
+varforuser=
+varfornice1=
+varfornice2=
+varforinc=
+varfordec=
+varfofilter=
+pid1=
+pid2=
+Reverse=0
+Help=0
+User=0
+Nice=0
+Inc=0
+Dec=0
+Filter=0
+GLOBAL=
+
+user(){
+  for userx in $varforuser;do
+    aux=$( echo "$aux" \n "$GLOBAL" | grep "$userx")
+  done
+  GLOBAL=$aux
+}
+
+increment(){
+  renice -n $varforinc -p $pid1
+}
+decrement(){
+  renice -n $varforinc -p $pid1
+}
+
+filter() {
+  boolean=0
+  aux1=1
+  aux3=$(echo "$GLOBAL" | tail -n1)
+  while [ $boolean = 0 ];do
+    aux=$( echo "$GLOBAL" | head -n $aux1 | tail -n 1 )
+    aux2=$( echo "$aux2" ; echo "$aux" | grep -e $varforfilter )
+    if [ "$aux" = "$aux3" ];then
+      boolean=1
+    fi
+    aux1=$((aux1+1))
+  done
+  GLOBAL=$aux2
+}
+
+nice(){
+  boolean=0
+  aux1=1
+  last=$( echo "$GLOBAL" |tr -s ' ' '#' | cut -d " " -f3 | tail -n 1 )
+  while [ $boolean = 0 ];do
+    aux=$(echo "$GLOBAL"  |tr -s ' ' '#'| cut -d "#" -f4 | head -n $aux1 | tail -n 1 )
+    if [ "$aux" != "-" ] && [ "$aux" != "" ];then
+      if [ $aux -ge $varfornice1 ] && [ $aux -le $varfornice2 ];then
+        aux2=$(echo "$aux2"; echo "$GLOBAL" | head -n $aux1 | tail -n 1)
+      fi
+    fi
+    pidcount=$( echo "$GLOBAL" | tr -s ' ' '#'| cut -d "#" -f3 | head -n $aux1 | tail -n 1 )
+    if [ "$pidcount" = "$last" ];then
+      boolean=1
+    fi
+    aux1=$((aux1+1))
+  done
+  GLOBAL=$aux2
+}
+
+
+
+reverse(){
+  aux1=$( echo "$GLOBAL" | sort -k 2,2 -r )
+  GLOBAL=$aux1
+}
+normal(){
+  aux2=$( echo "$GLOBAL" | sort -k 2,2 )
+  GLOBAL=$aux2
+}
+
+
+FIRST_OF_ALL(){
+  if [ $Inc = 1 ];then
+    increment
+  fi
+
+  if [ $Dec = 1 ];then
+    decrement
+  fi
+  GLOBAL=$(ps -axo user:10,time:10,pid:10,ni:10,comm:10,vsz:10,rss:10 --sort=time)
+  boolean=0
+  aux=1
+  while [ $boolean = 0 ];do
+    if [ $aux = 1 ];then
+      auxiliarvar="$(echo "$GLOBAL" | head -n $aux | tail -n 1 )          REL"
+      echo "$auxiliarvar"
+    else
+      A=$( echo "$GLOBAL"  |tr -s ' ' '#'| cut -d "#" -f6 | head -n $aux | tail -n 1 )
+      B=$( echo "$GLOBAL"  |tr -s ' ' '#'| cut -d "#" -f7 | head -n $aux | tail -n 1 )
+      if [ $A != 0 ];then
+        C=$(bc -l <<< "scale=5;$B/$A")
+      else
+        C="-"
+      fi
+      varaux+="$( echo "$GLOBAL" |head -n $aux | tail -n 1 )          $C
+"
+      pidcount=$(echo "$GLOBAL" |head -n $aux | tail -n 1 | sort -k 3,3)
+      last=$(echo "$GLOBAL" | tail -n 1 | sort -k 3,3)
+      if [ "$pidcount" = "$last" ];then
+        boolean=1
+      fi
+    fi
+    aux=$((aux+1))
+  done
+  GLOBAL=$varaux
+}
+
+
+
+
+helper()
+{
+ echo "-r      : Muestra los procesos de manera inversa respecto al tiempo de cpu"
+ echo "-user   : Muestra los procesos de un conjunto de usuarios separados por espacios (Ejecutar siempre en ultimo lugar)"
+ echo "-nice   : Se procesarán los procesos con prioridad entre a y b(a = menor ; b = mayor)"
+ echo "-inc    : Permite incrementar en n unidades la prioridad de los procesos seleccionados(primero pon las unidades de incremento, luego el pid)"
+ echo "-dec    : Permite reducir en n unidades la prioridad de los procesos seleccionados(primero pon las unidades de decremento, luego el pid)"
+ echo "-filter : Gestiona procesos a través de una expresión regular"
+ echo "-h      : Manual"
+}
+
+
+echo "Bienvenido"
+  while [ "$1" != "" ]; do
+     case $1 in
+      -r ) Reverse=1
+      ;;
+
+
+      -h ) helper
+      exit 1;;
+
+
+      -user )
+        User=1
+        while [ "$1" != "" ];do
+          shift
+          if [ "$1" != "" ];then
+            varforuser+="$1 "
+          fi
+        done
+        ;;
+
+
+      -nice )
+          Nice=1
+            shift
+            if [ "$1" != "" ];then
+              varfornice1="$1 "
+            fi
+            shift
+            if [ "$1" != "" ];then
+              varfornice2="$1 "
+            fi
+          ;;
+        -inc )
+          Inc=1
+          shift
+          if [ "$1" != "" ];then
+            varforinc="$1 "
+          fi
+          shift
+          if [ "$1" != "" ];then
+            pid1="$1 "
+          fi
+          ;;
+          -f )
+            Filter=1
+            shift
+            if [ "$1" != "" ];then
+              varforfilter="$1 "
+            fi
+            ;;
+
+      * ) echo "Error al elegir la opción"
+        exit 1
+
+
+     esac
+     shift
+  done
+
+
+
+
+FIRST_OF_ALL
+
+
+if [ $Help = 1 ];then
+  helper
+fi
+
+if [ $User = 1 ];then
+  user
+fi
+
+if [ $Nice = 1 ];then
+  if [ $varfornice1 -ge -20 ] && [ $varfornice2 -le 19 ];then
+    nice
+  else
+    echo "Valores para nice incorrectos debe ser entre (-20 y 19)"
+    exit 2
+  fi
+fi
+
+
+if [ $Filter = 1 ];then
+filter
+fi
+
+if [ $Reverse = 0 ];then
+  normal
+else
+  reverse
+fi
+echo "$GLOBAL"
